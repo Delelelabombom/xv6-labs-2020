@@ -2124,9 +2124,11 @@ sbrkmuch(char *s)
 }
 
 // can we read the kernel's memory?
+int countfree();
 void
 kernmem(char *s)
 {
+  int temp1 = countfree();
   char *a;
   int pid;
 
@@ -2145,6 +2147,13 @@ kernmem(char *s)
     if(xstatus != -1)  // did kernel kill child?
       exit(1);
   }
+  int temp2 = countfree();
+  if (temp1 != temp2)
+  {
+    printf("FAILED -- lost some free pages %d (out of %d)\n", temp1, temp2);
+    exit(1);
+  }
+
 }
 
 // if we run the system out of memory, does it clean up the last
@@ -2390,10 +2399,13 @@ rand()
 void
 stacktest(char *s)
 {
+  int temp1 = countfree();
   int pid;
   int xstatus;
+  //int xstatus2, pid2;
   
   pid = fork();
+  //pid2 = fork();
   if(pid == 0) {
     char *sp = (char *) r_sp();
     sp -= PGSIZE;
@@ -2404,11 +2416,29 @@ stacktest(char *s)
     printf("%s: fork failed\n", s);
     exit(1);
   }
+  // if(pid2 == 0) {
+  //   char *sp = (char *) r_sp();
+  //   sp -= PGSIZE;
+  //   // the *sp should cause a trap.
+  //   printf("%s: stacktest: read below stack %p\n", *sp);
+  //   exit(1);
+  // } else if(pid2 < 0){
+  //   printf("%s: fork failed\n", s);
+  //   exit(1);
+  // }
   wait(&xstatus);
+  //wait(&xstatus2);
   if(xstatus == -1)  // kernel killed child?
     exit(0);
   else
     exit(xstatus);
+
+  int temp2 = countfree();
+  if (temp1 != temp2)
+  {
+    printf("FAILED -- lost some free pages %d (out of %d)\n", temp1, temp2);
+    exit(1);
+  }
 }
 
 // regression test. copyin(), copyout(), and copyinstr() used to cast
@@ -2776,8 +2806,16 @@ main(int argc, char *argv[])
   int fail = 0;
   for (struct test *t = tests; t->s != 0; t++) {
     if((justone == 0) || strcmp(t->s, justone) == 0) {
+      int temp1 = countfree();
       if(!run(t->f, t->s))
         fail = 1;
+      int temp2 = countfree();
+      if (temp1 != temp2)
+      {
+        printf("FAILED -- lost some free pages %d (out of %d)\n", temp1, temp2);
+        exit(1);
+      }
+      
     }
   }
 
